@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 
 	log "github.com/sirupsen/logrus"
@@ -10,8 +11,30 @@ import (
 var applyFlags = Flags{}
 
 func applyWrapper() error {
-	log.Debugf("Debug log...")
-	log.Println("Info log...")
+	err := CheckFlags(&applyFlags)
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("Parsing config file...")
+	spec, err := ParseConfigFile(&applyFlags)
+	if err != nil {
+		return fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	VGPUConfig, err := GetSelectedVGPUConfig(&applyFlags, spec)
+	log.Debugf("Selecting specific vgpu configuration: %v", VGPUConfig)
+	if err != nil {
+		return fmt.Errorf("failed to select vgpu config: %v", err)
+	}
+
+	err = AssertVGPUConfig()
+	if err != nil {
+		log.Infoln("Apply vGPU device configuration...")
+		return nil
+	}
+
+	log.Infof("Selected vGPU device configuration successfully applied")
 	return nil
 }
 
