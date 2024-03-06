@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/chen-mao/go-xdxlib/pkg/xdxpci"
+	"github.com/chen-mao/xdxct-vgpu-device-manager/pkg/types"
+	"github.com/chen-mao/xdxct-vgpu-device-manager/pkg/vgpu"
 	"gopkg.in/yaml.v2"
 )
 
@@ -50,13 +54,101 @@ func GetSelectedVGPUConfig(f *Flags, spec *Spec) (VGPUConfigSpecSlice, error) {
 	return spec.VGPUConfigs[f.SelectedConfig], nil
 }
 
-// AssertVGPUConfig asserts that the selected vGPU config is applied to the node
-func AssertVGPUConfig() error {
+func WalkSelectedVGPUConfigForEachGPU(vGPUConfig VGPUConfigSpecSlice, f func(VGPUConfigSpec, int) error) error {
 	xdxpci := xdxpci.New()
-	_, err := xdxpci.GetGPUs()
+	gpus, err := xdxpci.GetGPUs()
 	if err != nil {
-		return fmt.Errorf("error get gpus info: %v", err)
+		return fmt.Errorf("error enumerating GPUs: %v", err)
+	}
+	for _, vc := range vGPUConfig {
+		if vc.DeviceFilter == nil {
+			log.Debugf("Walking VGPUConfig for (devices=%v)", vc.Devices)
+		} else {
+			log.Debugf("Walking VGPUConfig for (device-filter=%v, devices=%v)", vc.DeviceFilter, vc.Devices)
+		}
+
+		for i, gpu := range gpus {
+
+			deviceID := types.NewDeviceID(gpu.Device, gpu.Vendor)
+			// to do
+			// if !vc.MatchDeviceFilter(deviceID) {
+			// 	continue
+			// }
+			if !vc.MatchDevices(i) {
+				continue
+			}
+
+			log.Debugf("GPU %v: %v", i, deviceID)
+
+			err = f(vc, i)
+			if err != nil {
+				return nil
+			}
+		}
 	}
 
 	return nil
+}
+
+// AssertVGPUConfig asserts that the selected vGPU config is applied to the node
+func AssertVGPUConfig(vGPUConfig VGPUConfigSpecSlice) error {
+	xdxpci := xdxpci.New()
+	gpus, err := xdxpci.GetGPUs()
+	if err != nil {
+		return fmt.Errorf("error get gpus info: %v", err)
+	}
+	matched := make([]bool, len(gpus))
+	err = WalkSelectedVGPUConfigForEachGPU(vGPUConfig, func(vs VGPUConfigSpec, index int) error {
+		// configManager := vgpu.NewXdxlibVGPUConfigManager()
+		// to do
+		// _, err := configManager.GetVGPUConfig(index)
+		// if err != nil {
+		// 	return fmt.Errorf("error get vGPU config: %v", err)
+		// }
+		// log.Debugf("Asserting vGPU config: %v", vc.VGPUDevices)
+		// if current.Equals(vc.VGPUDevices) {
+		// 	log.Debugf("Skipping -- already set to desired value")
+		// 	return nil
+		// }
+
+		// log.Debugf("Updating vGPU config: %v", vs.VGPUDevices)
+		// err := configManager.SetVGPUConfig(index, vs.VGPUDevices)
+		// if err != nil {
+		// 	return fmt.Errorf("error setting vgpu config: %v", err)
+		// }
+		matched[index] = false
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, match := range matched {
+		if !match {
+			return fmt.Errorf("not all GPUs match the specified config")
+		}
+	}
+	return nil
+}
+
+func ApplyVGPUConfig(VGPUConfig VGPUConfigSpecSlice) error {
+	return WalkSelectedVGPUConfigForEachGPU(VGPUConfig, func(vs VGPUConfigSpec, index int) error {
+		configManager := vgpu.NewXdxlibVGPUConfigManager()
+		_, err := configManager.GetVGPUConfig(index)
+		if err != nil {
+			return fmt.Errorf("error getting vGPU config: %v", err)
+		}
+		// to do
+		// if current.Equals(vs.VGPUDevices) {
+		// 	log.Debugf("Skipping -- already set to desired value")
+		// 	return nil
+		// }
+
+		log.Debugf("Updating vGPU config: %v", vs.VGPUDevices)
+		err = configManager.SetVGPUConfig(index, vs.VGPUDevices)
+		if err != nil {
+			return fmt.Errorf("error setting VGPU config: %v", err)
+		}
+		return nil
+	})
 }

@@ -28,10 +28,15 @@ func applyWrapper() error {
 		return fmt.Errorf("failed to select vgpu config: %v", err)
 	}
 
-	err = AssertVGPUConfig()
+	log.Debugf("Checking current vGPU device configuration...")
+	err = AssertVGPUConfig(VGPUConfig)
 	if err != nil {
 		log.Infoln("Apply vGPU device configuration...")
-		return nil
+		err := ApplyVGPUConfig(VGPUConfig)
+		if err != nil {
+			return err
+		}
+		return err
 	}
 
 	log.Infof("Selected vGPU device configuration successfully applied")

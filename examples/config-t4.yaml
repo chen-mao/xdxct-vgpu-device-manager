@@ -4,49 +4,17 @@ vgpu-configs:
   PANGU-A0-1G-1-CORE:
     - devices: all
       vgpu-devices:
-        "PANGU-A0-1G-1-CORE": 2
+        "XGV_V0_1G_1_CORE": 2
 
   PANGU-A0-128M-1-CORE:
     - devices: all
       vgpu-devices:
-        "PANGU-A0-128M-1-CORE": 2
+        "XGV_V0_128M_1_CORE": 2
 
-  # T4-4Q:
-  #   - devices: all
-  #     vgpu-devices:
-  #       "T4-4Q": 4
-
-  # T4-8Q:
-  #   - devices: all
-  #     vgpu-devices:
-  #       "T4-8Q": 2
-
-  # T4-16Q:
-  #   - devices: all
-  #     vgpu-devices:
-  #       "T4-16Q": 1
-
-  # # Custom configurations
-  # T4-small:
-  #   - devices: [0]
-  #     vgpu-devices:
-  #       "T4-1Q": 16
-  #   - devices: [1]
-  #     vgpu-devices:
-  #       "T4-2Q": 8
-
-  # T4-medium:
-  #   - devices: [0]
-  #     vgpu-devices:
-  #       "T4-4Q": 4
-  #   - devices: [1]
-  #     vgpu-devices:
-  #       "T4-8Q": 2
-
-  # T4-large:
-  #   - devices: [0]
-  #     vgpu-devices:
-  #       "T4-8Q": 2
-  #   - devices: [1]
-  #     vgpu-devices:
-  #       "T4-16Q": 1
+  PANGU-A0-small:
+    - devices: [0]
+      vgpu-devices:
+        "XGV_V0_1G_1_CORE": 2
+    - devices: [1]
+      vgpu-devices:
+        "XGV_V0_128M_1_CORE": 2
