@@ -1,5 +1,9 @@
-github.com/chen-mao/go-xdxlib v0.0.0-20240306071545-1393c8b58ea2 h1:mg9OUqDjEuxDDZBXEVGkcYkPVQ79f9GJK3P5oZLfQEI=
-github.com/chen-mao/go-xdxlib v0.0.0-20240306071545-1393c8b58ea2/go.mod h1:6nK+gEvtkUbzhHghJ6s2h62/xx1xC50jTj69Fgpf8YM=
+github.com/chen-mao/go-xdxlib v0.0.0-20240306101131-f43092176837 h1:9YS+d5+hXAH5whCsBBl7gEuyWbcXhuQk/8RvIKFXX8Q=
+github.com/chen-mao/go-xdxlib v0.0.0-20240306101131-f43092176837/go.mod h1:6nK+gEvtkUbzhHghJ6s2h62/xx1xC50jTj69Fgpf8YM=
+github.com/chen-mao/go-xdxlib v0.0.0-20240308061513-dd0440a1c215 h1:ZI37NV28baGPnPMwWmkhQeMUCB0u+o+bY/DhAJx3c28=
+github.com/chen-mao/go-xdxlib v0.0.0-20240308061513-dd0440a1c215/go.mod h1:6nK+gEvtkUbzhHghJ6s2h62/xx1xC50jTj69Fgpf8YM=
+github.com/chen-mao/go-xdxlib v0.0.0-20240308084423-3fddeeb259cf h1:rztTYDKQLz7aKAKcnX06DtyQ7goHIF6Jpy89GHuGbPw=
+github.com/chen-mao/go-xdxlib v0.0.0-20240308084423-3fddeeb259cf/go.mod h1:6nK+gEvtkUbzhHghJ6s2h62/xx1xC50jTj69Fgpf8YM=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

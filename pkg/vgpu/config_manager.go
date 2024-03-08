@@ -25,13 +25,29 @@ func NewXdxlibVGPUConfigManager() Manager {
 	}
 }
 
+// GetVGPUConfig gets the 'VGPUConfig' currently applied to a GPU at a particular index
 func (cm *xdxlibVGPUConfigManager) GetVGPUConfig(gpu int) (types.VGPUConfig, error) {
-	return nil, nil
+	parentGPUDevice, err := cm.xdxlib.Xdxpci.GetGPUByIndex(gpu)
+	if err != nil {
+		return nil, fmt.Errorf("error getting device at index '%d': '%v'", gpu, err)
+	}
+
+	vGPUDevices, err := cm.xdxlib.Xdxmdev.GetAllMediatedDevices()
+	if err != nil {
+		return nil, fmt.Errorf("error getting all vgpu devices: '%v'", err)
+	}
+	vGpuConfigs := types.VGPUConfig{}
+	for _, vGPUDevice := range vGPUDevices {
+		if parentGPUDevice.Address == vGPUDevice.Parent.Address {
+			vGpuConfigs[vGPUDevice.MDEVType]++
+		}
+	}
+	return vGpuConfigs, nil
 }
 
+// SetVGPUConfig applies the selected `VGPUConfig` to a GPU at a particular index if it is not already applied
 func (cm *xdxlibVGPUConfigManager) SetVGPUConfig(gpu int, config types.VGPUConfig) error {
-	fmt.Println("--- start set vgpu config ---")
-	pciDeviceInfo, err := cm.xdxlib.Xdxpci.GetGPUByIndex(gpu)
+	parentGPUDevice, err := cm.xdxlib.Xdxpci.GetGPUByIndex(gpu)
 	if err != nil {
 		return fmt.Errorf("error getting device ay index '%d','%v'", gpu, err)
 	}
@@ -42,7 +58,7 @@ func (cm *xdxlibVGPUConfigManager) SetVGPUConfig(gpu int, config types.VGPUConfi
 
 	var currentDevices []*xdxmdev.ParentDevice
 	for _, p := range allDevicesInfo {
-		if p.Device == pciDeviceInfo.Device {
+		if p.Device == parentGPUDevice.Device {
 			currentDevices = append(currentDevices, p)
 		}
 	}
@@ -52,7 +68,7 @@ func (cm *xdxlibVGPUConfigManager) SetVGPUConfig(gpu int, config types.VGPUConfi
 	}
 	for key := range config {
 		if !currentDevices[0].IsMDEVTypeSupported(key) {
-			return fmt.Errorf("vGPU type %s is not support on GPU (indev=%d, address=%s)", key, gpu, pciDeviceInfo.Address)
+			return fmt.Errorf("vGPU type %s is not support on GPU (indev=%d, address=%s)", key, gpu, parentGPUDevice.Address)
 		}
 	}
 
@@ -70,15 +86,22 @@ func (cm *xdxlibVGPUConfigManager) SetVGPUConfig(gpu int, config types.VGPUConfi
 			if !supported {
 				return fmt.Errorf("error get available vGPU instances: %v", err)
 			}
-			// to do check available_mdev_instances
 
+			available, err := currentDevice.GetAvailableMDEVInstances(key)
+			if err != nil {
+				return fmt.Errorf("unable to get available gpu instances: %v", err)
+			}
+			if available <= 0 {
+				continue
+			}
+			numToCreate := min(remainingToCreate, available)
 			for i := 0; i < remainingToCreate; i++ {
 				err = currentDevice.CreateMDEVDevice(key, uuid.New().String())
 				if err != nil {
 					return fmt.Errorf("unable to create %s vGPU device on parent device %s: %v", key, currentDevice.Address, err)
 				}
 			}
-			remainingToCreate--
+			remainingToCreate -= numToCreate
 		}
 
 		if remainingToCreate > 0 {
@@ -107,4 +130,11 @@ func (cm *xdxlibVGPUConfigManager) ClearVGPUConfig(gpu int) error {
 		}
 	}
 	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

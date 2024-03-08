@@ -3,7 +3,7 @@ module github.com/chen-mao/xdxct-vgpu-device-manager
 go 1.19
 
 require (
-	github.com/chen-mao/go-xdxlib v0.0.0-20240306071545-1393c8b58ea2
+	github.com/chen-mao/go-xdxlib v0.0.0-20240308084423-3fddeeb259cf
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0

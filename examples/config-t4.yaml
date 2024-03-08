@@ -11,6 +11,7 @@ vgpu-configs:
       vgpu-devices:
         "XGV_V0_128M_1_CORE": 2
 
+  # custom config
   PANGU-A0-small:
     - devices: [0]
       vgpu-devices:

@@ -1,9 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"reflect"
-
 	"github.com/chen-mao/xdxct-vgpu-device-manager/pkg/types"
 )
 
@@ -34,7 +31,6 @@ func (vc *VGPUConfigSpec) MatchAllDevices() bool {
 }
 
 func (vc *VGPUConfigSpec) MatchDevices(index int) bool {
-	fmt.Printf("type: %v\n", reflect.TypeOf(vc.Devices))
 	switch devices := vc.Devices.(type) {
 	case []interface{}:
 		for _, d := range devices {
