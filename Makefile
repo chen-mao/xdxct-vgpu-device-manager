@@ -1,11 +1,21 @@
 MODULE := github.com/chen-mao/xdxct-vgpu-device-manager
 
+DOCKER ?= docker
+
+include $(CURDIR)/versions.mk
+
+BUILDIMAGE ?= vgpu-device-manager-build
+
 CMDS := $(patsubst ./cmd/%/,%,$(sort $(dir $(wildcard ./cmd/*/))))
 CMD_TARGETS := $(patsubst %,cmd-%, $(CMDS))
 
-display:
-	@echo $(CMDS)
-	@echo $(CMD_TARGETS)
+CHECK_TARGETS := assert-fmt vet lint misspell ineffassign
+MAKE_TARGETS := build fmt cmds $(CHECK_TARGETS)
+TARGETS := $(MAKE_TARGETS)
+DOCKER_TARGET := $(patsubst %, docker-%, $(TARGETS)) 
+
+
+.PHONY: $(TARGETS) $(DOCKER_TARGETS)
 
 GOOS := linux
 
@@ -33,5 +43,47 @@ assert-fmt:
 		rm fmt.out; \
 	fi
 
+
+ineffassign:
+	ineffassign $(MODULE)/...
+
+lint:
+# We use `go list -f '{{.Dir}}' $(MODULE)/...` to skip the `vendor` folder.
+	go list -f '{{.Dir}}' $(MODULE)/... | xargs golint -set_exit_status
+
+misspell:
+	misspell $(MODULE)/...
+
 vet:
 	go vet $(MODULE)/...
+
+.PHONY: .build-image .pull-build-image .push-build-image
+.build-image: docker/Dockerfile.devel
+	if [ x"$(SKIP_IMAGE_BUILD)" = x"" ]; then \
+		$(DOCKER) build \
+			--progress=plain \
+			--build-arg GOLANG_VERSION="$(GOLANG_VERSION)" \
+			--tag $(BUILDIMAGE) \
+			-f $(^) \
+			docker; \
+	fi
+
+.pull-build-image:
+	$(DOCKER) pull $(BUILDIMAGE)
+
+.push-build-image:
+	$(DOCKER) push $(BUILDIMAGE)
+
+
+$(DOCKER_TARGET): docker-%: .build-image
+	@echo "RUN make $(*) in container $(BUILDIMAGE)"
+	$(DOCKER) run \
+	  --rm \
+	  -e GOCACHE=/tmp/.cache \
+	  -v $(PWD):$(PWD) \
+	  -w $(PWD) \
+	  --user $$(id -u):$$(id -g) \
+	  $(BUILDIMAGE) \
+	     make $(*)
+
+
