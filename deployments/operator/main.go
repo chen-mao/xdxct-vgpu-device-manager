@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -19,7 +23,9 @@ import (
 )
 
 const (
-	resourceNodes = "nodes"
+	resourceNodes   = "nodes"
+	vGPUConfigLabel = "xdxct.com/vgpu-config"
+	cliName         = "xgv-vgpu-dm"
 )
 
 var (
@@ -29,6 +35,38 @@ var (
 	configFileFlag        string
 	defaultVGPUConfigFlag string
 )
+
+type SyncableVGPUConfig struct {
+	cond           *sync.Cond
+	mutex          sync.Mutex
+	current        string
+	lastVGPUConfig string
+}
+
+func NewSyncableVGPUConfig() *SyncableVGPUConfig {
+	var m SyncableVGPUConfig
+	m.cond = sync.NewCond(&m.mutex)
+	return &m
+}
+
+func (m *SyncableVGPUConfig) Set(value string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.current = value
+	if m.current != "" {
+		m.cond.Broadcast()
+	}
+}
+
+func (m *SyncableVGPUConfig) Get() string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if m.lastVGPUConfig == m.current {
+		m.cond.Wait()
+	}
+	m.lastVGPUConfig = m.current
+	return m.lastVGPUConfig
+}
 
 func main() {
 	app := cli.NewApp()
@@ -101,7 +139,7 @@ func validationFlags(c *cli.Context) error {
 	return nil
 }
 
-func notifyVGPUConfigChangesFromNode(clientset *kubernetes.Clientset) chan struct{} {
+func notifyVGPUConfigChangesFromNode(clientset *kubernetes.Clientset, vGPUConfig *SyncableVGPUConfig) chan struct{} {
 	lw := cache.NewListWatchFromClient(
 		clientset.CoreV1().RESTClient(),
 		resourceNodes,
@@ -114,19 +152,20 @@ func notifyVGPUConfigChangesFromNode(clientset *kubernetes.Clientset) chan struc
 		10*time.Second,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				fmt.Println(obj.(*corev1.Node).Labels["mchen"])
+				vGPUConfig.Set(obj.(*corev1.Node).Labels[vGPUConfigLabel])
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
-				fmt.Println(oldObj.(*corev1.Node).Labels["mchen"])
-				fmt.Println(newObj.(*corev1.Node).Labels["mchen"])
+				oldLabel := oldObj.(*corev1.Node).Labels[vGPUConfigLabel]
+				newLabel := newObj.(*corev1.Node).Labels[vGPUConfigLabel]
+				if oldLabel != newLabel {
+					vGPUConfig.Set(newLabel)
+				}
 			},
 		},
 	)
 
 	stopch := make(chan struct{})
-
 	go controller.Run(stopch)
-
 	return stopch
 }
 
@@ -153,10 +192,74 @@ func start(c *cli.Context) error {
 		return fmt.Errorf("error building kubernetes clientset from config: %s", err)
 	}
 
-	stopch := notifyVGPUConfigChangesFromNode(clientset)
+	vGPUConfig := NewSyncableVGPUConfig()
+
+	stopch := notifyVGPUConfigChangesFromNode(clientset, vGPUConfig)
 	defer close(stopch)
 
-	select {}
+	//Apply initial vGPU configuration
+	selectedConfig, err := getNodeLabel(clientset)
+	if err != nil {
+		return fmt.Errorf("unable to get vGPU config label: %v", err)
+	}
+	if selectedConfig == "" {
+		log.Infof("No vGPU config specified for node. Proceeding with default config: %s", defaultVGPUConfigFlag)
+		selectedConfig = defaultVGPUConfigFlag
+	} else {
+		selectedConfig = vGPUConfig.Get()
+	}
 
+	log.Infof("Updating to vGPU config: %s", selectedConfig)
+	err = updateConfig(selectedConfig)
+	if err != nil {
+		log.Errorf("ERROR: %v", err)
+	} else {
+		log.Infof("Successfully updated to vGPU config: %s", selectedConfig)
+	}
+
+	for {
+		log.Infof("Waiting for change to %s label", vGPUConfigLabel)
+		value := vGPUConfig.Get()
+		log.Infof("Updating t vGPU config: %s", value)
+		err = updateConfig(value)
+		if err != nil {
+			log.Errorf("ERROR: %v", err)
+			continue
+		}
+		log.Infof("Successfully update to vGPU config: %s", value)
+	}
+}
+
+func getNodeLabel(clientset *kubernetes.Clientset) (string, error) {
+	node, err := clientset.CoreV1().Nodes().Get(context.TODO(), nodeNameFlag, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to get node obj: %v", err)
+	}
+	value, ok := node.Labels[vGPUConfigLabel]
+	if !ok {
+		return "", nil
+	}
+	return value, nil
+}
+
+func updateConfig(selectedConfig string) error {
+	log.Info("Applying the selected vGPU device configuration to the node")
+	err := applyConfig(selectedConfig)
+	if err != nil {
+		return fmt.Errorf("unable to apply config %s: %v", selectedConfig, err)
+	}
 	return nil
+}
+
+func applyConfig(config string) error {
+	args := []string{
+		"-v",
+		"apply",
+		"-f", configFileFlag,
+		"-c", config,
+	}
+	cmd := exec.Command(cliName, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
