@@ -1,1 +1,3 @@
+VERSION := 1.0.0
+
 GOLANG_VERSION := 1.19.5

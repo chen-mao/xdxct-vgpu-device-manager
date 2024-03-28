@@ -7,7 +7,7 @@ It allows administrators to declaratively define a set of possible vGPU device c
 ## Build xgv-vgpu-dm
 This will generate a binary called xgv-vgpu-dm.
 ```shell
-make cmds-nvidia-vgpu-dm
+make cmds-xgv-vgpu-dm
 ```
 
 ## Usage
@@ -21,3 +21,22 @@ sudo ./xgv-vgpu-dm -v apply -f examples/config-vgpu.yaml -c PANGU-A0-128M-1-CORE
 ```
 
 ## Kubernetes Deployment
+1. Build image
+```shell
+make -f deployments/operator/Makefile build-dev
+```
+2. Create the configmap file of vgpu-config-file
+```shell
+kubectl apply -f deplyments/operator/configmap.yaml
+```
+3. Deploy vgpu-device-manager
+```shell
+kubectl apply -f deplyments/operator/xdxct-vgpu-device-manager.yaml
+```
+4. Check the vgpu-device-manager
+```shell
+kubectl label node <node-name> --overwrite xdxct.com/vgpu-config=PANGU-A0-1G-1-CORE
+
+$ cat /sys/class/mdev_bus/<pci-id>/<vgpu-uuid>/mdev_type/name
+Type ID: 8; Type Name: XGV_V0_128M_1_CORE
+```
