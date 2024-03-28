@@ -1,0 +1,40 @@
+ARG BASE_IMAGE=ubuntu
+ARG BASE_VERSION=base-ubuntu20.04
+
+ARG VERSION=1.0.0
+
+FROM hub.xdxct.com/xdxct-docker/${BASE_IMAGE}:${BASE_VERSION} as builder
+
+RUN apt-get update \
+    && apt-get install -y -qq --no-install-recommends \
+     wget \
+     ca-certificates \
+     make \
+     gcc \
+     g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV GOLANG_VERSION=1.19.5
+RUN wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz \
+    | tar -C /usr/local -xz
+
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+
+ENV GOOS=linux\
+    GOARCH=amd64
+
+WORKDIR /build/xdxct-vgpu-device-manager
+COPY . .
+RUN GOOS=linux go build -o /artifacts/xgv-vgpu-dm ./cmd/xgv-vgpu-dm
+RUN GOOS=linux go build -o /artifacts/k8s-xgv-vgpu-dm ./deployments/operator
+
+FROM hub.xdxct.com/xdxct-docker/${BASE_IMAGE}:${BASE_VERSION}
+
+COPY --from=builder /artifacts/xgv-vgpu-dm /usr/bin/xgv-vgpu-dm
+COPY --from=builder /artifacts/k8s-xgv-vgpu-dm /usr/bin/k8s-xgv-vgpu-dm
+
+LABEL version="${VERSION}"
+LABEL vendor="XDXCT"
+
+ENTRYPOINT [ "k8s-xgv-vgpu-dm" ]

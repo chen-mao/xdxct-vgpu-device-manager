@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xdxct-vgpu-config-file
+  namespace: "default"
+data:
+  config-vgpu.yaml: |
+    version: v1
+    vgpu-configs:
+      PANGU-A0-1G-1-CORE:
+        - devices: all
+          vgpu-devices:
+            "XGV_V0_1G_1_CORE": 2
+
+      PANGU-A0-128M-1-CORE:
+        - devices: all
+          vgpu-devices:
+            "XGV_V0_128M_1_CORE": 2
+
+      PANGU-A0-small:
+        - devices: [0]
+          vgpu-devices:
+            "XGV_V0_1G_1_CORE": 2
+        - devices: [1]
+          vgpu-devices:
+            "XGV_V0_128M_1_CORE": 2
