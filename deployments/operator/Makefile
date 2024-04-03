@@ -23,7 +23,7 @@ build-%: DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/amd64
 $(BUILD_TARGETS): build-%:
 	$(DOCKER) build \
 		--tag $(IMAGE) \
-		--build-arg GOLANG_VERSION="$(GOLANG_VERSION)"
+		--build-arg GOLANG_VERSION="$(GOLANG_VERSION)" \
 		--build-arg VERSION="$(VERSION)" \
 		--file $(DOCKERFILE) \
 		$(CURDIR)
