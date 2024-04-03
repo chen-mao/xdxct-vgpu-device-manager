@@ -24,11 +24,10 @@ import (
 )
 
 const (
-	resourceNodes                    = "nodes"
-	vGPUConfigLabel                  = "xdxct.com/vgpu-config"
-	cliName                          = "xgv-vgpu-dm"
-	kubevirt_device_plugin_namespace = "kube-system"
-	kubevirt_device_plugin_Label     = "name=xdxct-kubevirt-dp-ds"
+	resourceNodes                = "nodes"
+	vGPUConfigLabel              = "xdxct.com/vgpu-config"
+	cliName                      = "xgv-vgpu-dm"
+	kubevirt_device_plugin_Label = "name=xdxct-kubevirt-dp-ds"
 )
 
 var (
@@ -223,7 +222,6 @@ func start(c *cli.Context) error {
 	for {
 		log.Infof("Waiting for change to %s label", vGPUConfigLabel)
 		value := vGPUConfig.Get()
-		log.Infof("Updating t vGPU config: %s", value)
 		err = updateConfig(clientset, value)
 		if err != nil {
 			log.Errorf("ERROR: %v", err)
@@ -249,7 +247,7 @@ func updateConfig(clientset *kubernetes.Clientset, selectedConfig string) error 
 	// to do add validator components
 	// nvidia采用的删除label, operator 会shutdown validation和kubevirt-device-plugin的组件，接着再去重新调用组件。
 	// 这里是删除了pod, daemonset 会重启pod达到重启的效果。
-	log.Info("Restart all GPU Component in Kubernetes by disabling their nodeSelector labels")
+	log.Info("Restart all GPU Component in Kubernetes.")
 	err := deleteGPUComponent(clientset)
 	if err != nil {
 		fmt.Printf("Unable to delete GPU component: %v", err)
@@ -268,7 +266,7 @@ func updateConfig(clientset *kubernetes.Clientset, selectedConfig string) error 
 // to do: delete pod by set label
 // to do: add validation
 func deleteGPUComponent(clientset *kubernetes.Clientset) error {
-	Pods, err := clientset.CoreV1().Pods(kubevirt_device_plugin_namespace).List(context.TODO(), metav1.ListOptions{
+	Pods, err := clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{
 		LabelSelector: kubevirt_device_plugin_Label,
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeNameFlag),
 	})
@@ -276,18 +274,11 @@ func deleteGPUComponent(clientset *kubernetes.Clientset) error {
 		return fmt.Errorf("unable to get pod object: %v", err)
 	}
 	for _, pod := range Pods.Items {
-		clientset.CoreV1().Pods(kubevirt_device_plugin_namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		err = clientset.CoreV1().Pods("default").Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to get pod object: %v", err)
 		}
 	}
-
-	log.Infof("waiting for kubevirt-device-plugin to delete")
-	err = waitForPodDeletion(clientset)
-	if err != nil {
-		return fmt.Errorf("failed to delete po:%v", err)
-	}
-
 	return nil
 }
 
@@ -295,7 +286,7 @@ func waitForPodDeletion(clientset *kubernetes.Clientset) error {
 	timeOut := time.After(120 * time.Second)
 	timeInterval := time.Second * 2
 	for {
-		podList, err := clientset.CoreV1().Pods(kubevirt_device_plugin_namespace).List(context.TODO(), metav1.ListOptions{
+		podList, err := clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{
 			LabelSelector: kubevirt_device_plugin_Label,
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeNameFlag),
 		})
