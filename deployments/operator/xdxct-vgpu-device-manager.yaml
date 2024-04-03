@@ -57,7 +57,7 @@ spec:
       serviceAccountName: xdxct-vgpu-device-manager
       containers:
       - name: xdxct-vgpu-device-manager
-        image: hub.xdxct.com/xdxct-docker/xdxct-vgpu-device-manager:devel
+        image: hub.xdxct.com/kubevirt/xdxct-vgpu-device-manager:devel
         imagePullPolicy: IfNotPresent
         env:
         - name: NODENAME

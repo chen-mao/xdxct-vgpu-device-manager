@@ -27,7 +27,7 @@ ENV GOOS=linux\
 WORKDIR /build/xdxct-vgpu-device-manager
 COPY . .
 RUN GOOS=linux go build -o /artifacts/xgv-vgpu-dm ./cmd/xgv-vgpu-dm
-RUN GOOS=linux go build -o /artifacts/k8s-xgv-vgpu-dm ./deployments/operator
+RUN GOOS=linux go build -o /artifacts/k8s-xgv-vgpu-dm ./cmd/k8s-xgv-vgpu-dm
 
 FROM hub.xdxct.com/xdxct-docker/${BASE_IMAGE}:${BASE_VERSION}
 

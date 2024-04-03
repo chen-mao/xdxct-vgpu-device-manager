@@ -13,6 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -23,9 +24,11 @@ import (
 )
 
 const (
-	resourceNodes   = "nodes"
-	vGPUConfigLabel = "xdxct.com/vgpu-config"
-	cliName         = "xgv-vgpu-dm"
+	resourceNodes                    = "nodes"
+	vGPUConfigLabel                  = "xdxct.com/vgpu-config"
+	cliName                          = "xgv-vgpu-dm"
+	kubevirt_device_plugin_namespace = "kube-system"
+	kubevirt_device_plugin_Label     = "name=xdxct-kubevirt-dp-ds"
 )
 
 var (
@@ -173,7 +176,7 @@ func start(c *cli.Context) error {
 	var config *rest.Config
 	var err error
 
-	// to do: delete line 128 ~ 133
+	// to do: delete line 177~182
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfigFlag = *flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 	} else {
@@ -210,7 +213,7 @@ func start(c *cli.Context) error {
 	}
 
 	log.Infof("Updating to vGPU config: %s", selectedConfig)
-	err = updateConfig(selectedConfig)
+	err = updateConfig(clientset, selectedConfig)
 	if err != nil {
 		log.Errorf("ERROR: %v", err)
 	} else {
@@ -221,7 +224,7 @@ func start(c *cli.Context) error {
 		log.Infof("Waiting for change to %s label", vGPUConfigLabel)
 		value := vGPUConfig.Get()
 		log.Infof("Updating t vGPU config: %s", value)
-		err = updateConfig(value)
+		err = updateConfig(clientset, value)
 		if err != nil {
 			log.Errorf("ERROR: %v", err)
 			continue
@@ -242,13 +245,73 @@ func getNodeLabel(clientset *kubernetes.Clientset) (string, error) {
 	return value, nil
 }
 
-func updateConfig(selectedConfig string) error {
-	log.Info("Applying the selected vGPU device configuration to the node")
-	err := applyConfig(selectedConfig)
+func updateConfig(clientset *kubernetes.Clientset, selectedConfig string) error {
+	// to do add validator components
+	// nvidia采用的删除label, operator 会shutdown validation和kubevirt-device-plugin的组件，接着再去重新调用组件。
+	// 这里是删除了pod, daemonset 会重启pod达到重启的效果。
+	log.Info("Restart all GPU Component in Kubernetes by disabling their nodeSelector labels")
+	err := deleteGPUComponent(clientset)
 	if err != nil {
-		return fmt.Errorf("unable to apply config %s: %v", selectedConfig, err)
+		fmt.Printf("Unable to delete GPU component: %v", err)
+		return err
+	}
+
+	log.Info("Applying the selected vGPU device configuration to the node")
+	err = applyConfig(selectedConfig)
+	if err != nil {
+		fmt.Printf("Unable to apply config %s: %v", selectedConfig, err)
+		return err
 	}
 	return nil
+}
+
+// to do: delete pod by set label
+// to do: add validation
+func deleteGPUComponent(clientset *kubernetes.Clientset) error {
+	Pods, err := clientset.CoreV1().Pods(kubevirt_device_plugin_namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: kubevirt_device_plugin_Label,
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeNameFlag),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to get pod object: %v", err)
+	}
+	for _, pod := range Pods.Items {
+		clientset.CoreV1().Pods(kubevirt_device_plugin_namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to get pod object: %v", err)
+		}
+	}
+
+	log.Infof("waiting for kubevirt-device-plugin to delete")
+	err = waitForPodDeletion(clientset)
+	if err != nil {
+		return fmt.Errorf("failed to delete po:%v", err)
+	}
+
+	return nil
+}
+
+func waitForPodDeletion(clientset *kubernetes.Clientset) error {
+	timeOut := time.After(120 * time.Second)
+	timeInterval := time.Second * 2
+	for {
+		podList, err := clientset.CoreV1().Pods(kubevirt_device_plugin_namespace).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: kubevirt_device_plugin_Label,
+			FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeNameFlag),
+		})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if len(podList.Items) == 0 {
+			return nil
+		}
+
+		select {
+		case <-time.After(timeInterval):
+		case <-timeOut:
+			return fmt.Errorf("failed to delete pod: %v", err)
+		}
+	}
 }
 
 func applyConfig(config string) error {
